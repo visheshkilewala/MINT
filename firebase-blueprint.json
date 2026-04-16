@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a citizen participating in the waste management program.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "displayName": { "type": "string", "description": "The name of the user." },
+        "swacchCoinBalance": { "type": "number", "description": "The current balance of SwacchCoins." },
+        "flaggedForEducation": { "type": "boolean", "description": "Whether the user needs educational intervention due to poor segregation." }
+      },
+      "required": ["uid", "swacchCoinBalance"]
+    },
+    "CollectorLog": {
+      "title": "CollectorLog",
+      "description": "A log entry created by a collector when a bag is scanned and graded.",
+      "type": "object",
+      "properties": {
+        "collectorId": { "type": "string", "description": "The ID of the collector who scanned the bag." },
+        "userId": { "type": "string", "description": "The ID of the user who deposited the bag." },
+        "bagType": { "type": "string", "enum": ["WET", "DRY", "E_WASTE", "HAZARDOUS", "SANITARY", "GLASS_METAL"], "description": "The type of waste in the bag." },
+        "grade": { "type": "string", "enum": ["PERFECT", "MIXED", "REJECT"], "description": "The segregation quality grade." },
+        "timestamp": { "type": "number", "description": "Epoch timestamp of the log." }
+      },
+      "required": ["collectorId", "userId", "bagType", "grade", "timestamp"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A ledger entry for SwacchCoin rewards.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user receiving the reward." },
+        "amount": { "type": "number", "description": "The amount of SwacchCoins awarded." },
+        "type": { "type": "string", "enum": ["WASTE_DEPOSIT"], "description": "The type of transaction." },
+        "timestamp": { "type": "number", "description": "Epoch timestamp of the transaction." }
+      },
+      "required": ["userId", "amount", "type", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Citizen profiles and balances."
+    },
+    "/collectorLogs/{logId}": {
+      "schema": "CollectorLog",
+      "description": "Audit logs for waste collection."
+    },
+    "/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "Financial ledger for rewards."
+    }
+  }
+}

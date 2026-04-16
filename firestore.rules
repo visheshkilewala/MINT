@@ -1,0 +1,113 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: userId
+// Fields:
+//   - uid: string (required) - The unique ID of the user.
+//   - displayName: string (optional) - The name of the user.
+//   - swacchCoinBalance: number (required) - The current balance of SwacchCoins.
+//   - flaggedForEducation: boolean (optional) - Whether the user needs educational intervention.
+//
+// Collection: collectorLogs
+// Document ID: logId (auto-generated)
+// Fields:
+//   - collectorId: string (required) - The ID of the collector.
+//   - userId: string (required) - The ID of the user.
+//   - bagType: string (required, enum: WET, DRY, E_WASTE, HAZARDOUS, SANITARY, GLASS_METAL)
+//   - grade: string (required, enum: PERFECT, MIXED, REJECT)
+//   - timestamp: number (required) - Epoch timestamp.
+//
+// Collection: transactions
+// Document ID: txId (auto-generated)
+// Fields:
+//   - userId: string (required) - The ID of the user.
+//   - amount: number (required) - The amount of SwacchCoins.
+//   - type: string (required, enum: WASTE_DEPOSIT)
+//   - timestamp: number (required) - Epoch timestamp.
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        ((request.auth.token.email == "visheshkilewala@gmail.com" && request.auth.token.email_verified == true) || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'swacchCoinBalance']) &&
+             data.uid is string &&
+             data.swacchCoinBalance is number && data.swacchCoinBalance >= 0 &&
+             (!('displayName' in data) || data.displayName is string) &&
+             (!('flaggedForEducation' in data) || data.flaggedForEducation is bool) &&
+             (!('role' in data) || data.role in ['admin', 'user']);
+    }
+
+    function isValidCollectorLog(data) {
+      return hasOnlyAllowedFields(['collectorId', 'userId', 'bagType', 'grade', 'timestamp']) &&
+             data.collectorId is string &&
+             data.userId is string &&
+             data.bagType in ['WET', 'DRY', 'E_WASTE', 'HAZARDOUS', 'SANITARY', 'GLASS_METAL'] &&
+             data.grade in ['PERFECT', 'MIXED', 'REJECT'] &&
+             data.timestamp is number;
+    }
+
+    function isValidTransaction(data) {
+      return hasOnlyAllowedFields(['userId', 'amount', 'type', 'timestamp']) &&
+             data.userId is string &&
+             data.amount is number &&
+             data.type == 'WASTE_DEPOSIT' &&
+             data.timestamp is number;
+    }
+
+    // ===============================================================
+    // Match Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+      allow update: if isAdmin() && isValidUser(request.resource.data);
+    }
+
+    match /collectorLogs/{logId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.collectorId || isAdmin());
+      allow create: if isAdmin() && isValidCollectorLog(request.resource.data);
+    }
+
+    match /transactions/{txId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAdmin() && isValidTransaction(request.resource.data);
+    }
+  }
+}
